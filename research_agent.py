@@ -1,11 +1,10 @@
 import os
-import re
 from crewai import Agent, Task, Crew, LLM
 
 
-# =========================================================
+# ============================================================
 # CONFIGURATION
-# =========================================================
+# ============================================================
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
@@ -14,14 +13,12 @@ if not GROQ_API_KEY:
         "GROQ_API_KEY is not configured."
     )
 
-
-# Correct Groq model ID
 MODEL_NAME = "openai/gpt-oss-120b"
 
 
-# =========================================================
+# ============================================================
 # LLM
-# =========================================================
+# ============================================================
 
 llm = LLM(
     model=MODEL_NAME,
@@ -31,52 +28,28 @@ llm = LLM(
 )
 
 
-# =========================================================
-# TEXT CLEANING
-# =========================================================
+# ============================================================
+# TEXT HELPERS
+# ============================================================
 
 def clean_text(text):
     if not text:
         return ""
 
-    text = str(text)
-
-    text = text.replace("\x00", "")
-
-    return text.strip()
-
-
-# =========================================================
-# PAGE ESTIMATION
-# =========================================================
-
-def estimate_pages(text):
-    """
-    Approximate page count.
-
-    Assumption:
-    ~500 words per page.
-
-    This is an estimate because actual page count
-    depends on font, margins, spacing, tables, etc.
-    """
-
-    words = len(text.split())
-
-    return max(1, round(words / 500))
+    return str(text).replace("\x00", "").strip()
 
 
 def estimate_words_for_pages(max_pages):
     """
-    Convert requested pages into approximate word count.
+    Approximate 500 words per page.
     """
 
-    return max_pages * 500
+    return int(max_pages) * 500
 
 
-# =========================================================
-# BUILD RESEARCH OUTLINE
-# =========================================================
+# ============================================================
+# BUILD OUTLINE
+# ============================================================
 
 def build_outline(topic, evidence, max_pages):
 
@@ -84,20 +57,26 @@ def build_outline(topic, evidence, max_pages):
 
     agent = Agent(
         role="Senior Research Strategist",
+
         goal=(
-            "Create a comprehensive and logically structured "
-            "research report outline."
+            "Create a comprehensive, logical and professional "
+            "research outline."
         ),
+
         backstory=(
             "You are an experienced research strategist specializing "
-            "in technical, business, energy and technology research."
+            "in renewable energy, technology, business and market research."
         ),
+
         llm=llm,
+
         verbose=False,
+
         allow_delegation=False,
     )
 
     task = Task(
+
         description=f"""
 Create a detailed research outline for:
 
@@ -116,25 +95,40 @@ Approximately {target_words} words.
 Requirements:
 
 1. Create a logical professional structure.
-2. Include an introduction.
-3. Include major research sections.
-4. Include subsections where appropriate.
-5. Include market/technical/business analysis where relevant.
-6. Include evidence-based conclusions.
-7. Avoid unnecessary repetition.
-8. Allocate enough sections to support approximately
-   {max_pages} pages.
-9. The final report must not intentionally exceed the
-   requested page limit.
+2. Include an Executive Summary.
+3. Include an Introduction.
+4. Include major research sections.
+5. Include subsections where appropriate.
+6. Include market analysis where relevant.
+7. Include technical analysis where relevant.
+8. Include business and economic analysis where relevant.
+9. Include risks and challenges.
+10. Include future outlook.
+11. Include evidence-based conclusions.
+12. Avoid unnecessary repetition.
+13. Allocate enough sections to support approximately
+    {max_pages} pages.
+14. The final report must not intentionally exceed
+    the requested page limit.
 
 Return ONLY the outline.
 """,
-        expected_output="A detailed structured research outline.",
+
+        expected_output=(
+            "A detailed structured research outline "
+            "with sections and subsections."
+        ),
+
+        # ====================================================
+        # IMPORTANT FIX
+        # ====================================================
+        agent=agent,
     )
 
     crew = Crew(
         agents=[agent],
         tasks=[task],
+        process="sequential",
         verbose=False,
     )
 
@@ -145,34 +139,47 @@ Return ONLY the outline.
     )
 
 
-# =========================================================
+# ============================================================
 # GENERATE FINAL REPORT
-# =========================================================
+# ============================================================
 
-def generate_report(topic, outline, evidence, max_pages):
+def generate_report(
+    topic,
+    outline,
+    evidence,
+    max_pages,
+):
 
     target_words = estimate_words_for_pages(max_pages)
 
     agent = Agent(
+
         role="Senior Research Report Writer",
+
         goal=(
-            "Produce a comprehensive, factual, well-structured "
+            "Produce a comprehensive, factual and "
             "professional research report."
         ),
+
         backstory=(
-            "You are an expert long-form research writer who "
-            "produces evidence-based technical and business reports."
+            "You are an expert long-form research writer "
+            "specializing in renewable energy, solar PV, "
+            "BESS, technology and business research."
         ),
+
         llm=llm,
+
         verbose=False,
+
         allow_delegation=False,
     )
 
     task = Task(
+
         description=f"""
 Write the final research report.
 
-TOPIC:
+RESEARCH TOPIC:
 {topic}
 
 RESEARCH OUTLINE:
@@ -181,22 +188,19 @@ RESEARCH OUTLINE:
 RESEARCH EVIDENCE:
 {evidence}
 
-REPORT LENGTH:
+============================================================
+REPORT LENGTH
+============================================================
 
-Maximum pages requested:
+Maximum requested pages:
 {max_pages}
 
-Approximate maximum words:
+Approximate target words:
 {target_words}
-
-IMPORTANT LENGTH RULE:
-
-Keep the report approximately within the requested
-{max_pages}-page limit.
 
 Use approximately 500 words per page.
 
-Therefore:
+Examples:
 
 5 pages   ≈ 2,500 words
 10 pages  ≈ 5,000 words
@@ -206,44 +210,59 @@ Therefore:
 250 pages ≈ 125,000 words
 500 pages ≈ 250,000 words
 
-REPORT REQUIREMENTS:
+============================================================
+REPORT REQUIREMENTS
+============================================================
 
-- Professional title
-- Executive Summary
-- Introduction
-- Main research sections
-- Subsections
-- Technical/business analysis where relevant
-- Tables where useful
-- Key findings
-- Risks and limitations
-- Conclusion
-- References/sources based only on available evidence
+Include:
 
-Do not invent sources.
+1. Title
+2. Executive Summary
+3. Introduction
+4. Main research sections
+5. Subsections
+6. Market analysis
+7. Technical analysis where relevant
+8. Business/economic analysis where relevant
+9. Key trends
+10. Risks and challenges
+11. Opportunities
+12. Future outlook
+13. Key findings
+14. Conclusion
+15. References/sources where available
 
-Do not fabricate statistics.
+Rules:
 
-Clearly identify uncertainty.
+- Use Markdown headings.
+- Use tables where useful.
+- Do not invent sources.
+- Do not fabricate statistics.
+- Do not fabricate citations.
+- Clearly identify uncertainty.
+- Do not repeat information simply to increase length.
+- Prioritize useful information over filler.
+- Keep the report approximately within the requested
+  {max_pages}-page limit.
 
-Do not repeat information merely to increase length.
-
-Prioritize useful information over filler.
-
-Use Markdown headings.
-
-The final report should be approximately
-{max_pages} pages or less.
+Return the complete research report.
 """,
+
         expected_output=(
             "A complete professional research report "
             "within the requested length."
         ),
+
+        # ====================================================
+        # IMPORTANT FIX
+        # ====================================================
+        agent=agent,
     )
 
     crew = Crew(
         agents=[agent],
         tasks=[task],
+        process="sequential",
         verbose=False,
     )
 
@@ -254,9 +273,9 @@ The final report should be approximately
     )
 
 
-# =========================================================
-# LIMIT REPORT BY WORD COUNT
-# =========================================================
+# ============================================================
+# PAGE LIMIT ENFORCEMENT
+# ============================================================
 
 def enforce_page_limit(report, max_pages):
 
@@ -267,22 +286,19 @@ def enforce_page_limit(report, max_pages):
     if len(words) <= max_words:
         return report
 
-    truncated_words = words[:max_words]
+    truncated = " ".join(words[:max_words])
 
-    truncated_report = " ".join(truncated_words)
-
-    truncated_report += (
+    truncated += (
         "\n\n---\n\n"
-        "*Report truncated to the selected maximum "
-        f"length of approximately {max_pages} pages.*"
+        f"*Report limited to approximately {max_pages} pages.*"
     )
 
-    return truncated_report
+    return truncated
 
 
-# =========================================================
-# MAIN FUNCTION
-# =========================================================
+# ============================================================
+# MAIN RESEARCH FUNCTION
+# ============================================================
 
 def generate_long_research_report(
     topic,
@@ -290,15 +306,24 @@ def generate_long_research_report(
     max_pages=25,
 ):
 
-    # Safety limits
-    max_pages = max(5, min(int(max_pages), 500))
+    # --------------------------------------------------------
+    # Safety validation
+    # --------------------------------------------------------
+
+    max_pages = max(
+        5,
+        min(
+            int(max_pages),
+            500,
+        ),
+    )
 
     if evidence is None:
         evidence = ""
 
-    # -----------------------------------------------------
-    # Build outline
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # STEP 1 — CREATE OUTLINE
+    # --------------------------------------------------------
 
     outline = build_outline(
         topic=topic,
@@ -306,9 +331,9 @@ def generate_long_research_report(
         max_pages=max_pages,
     )
 
-    # -----------------------------------------------------
-    # Generate report
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # STEP 2 — WRITE REPORT
+    # --------------------------------------------------------
 
     report = generate_report(
         topic=topic,
@@ -317,9 +342,9 @@ def generate_long_research_report(
         max_pages=max_pages,
     )
 
-    # -----------------------------------------------------
-    # Enforce requested page limit
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # STEP 3 — ENFORCE PAGE LIMIT
+    # --------------------------------------------------------
 
     report = enforce_page_limit(
         report=report,
