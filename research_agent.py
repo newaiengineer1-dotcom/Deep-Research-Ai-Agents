@@ -7,7 +7,7 @@ from crewai import Agent, Task, Crew, LLM
 # GROQ CONFIGURATION
 # ============================================================
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 if not GROQ_API_KEY:
     raise RuntimeError(
@@ -19,36 +19,36 @@ if not GROQ_API_KEY:
 # ============================================================
 # IMPORTANT
 # ============================================================
-# DO NOT CHANGE THIS TO:
-# gpt-oss-120b
+# Current Groq model ID:
 #
-# The correct Groq model ID is:
 # openai/gpt-oss-120b
+#
+# DO NOT use:
+#
+# gpt-oss-120b
 # ============================================================
 
 MODEL_NAME = "openai/gpt-oss-120b"
 
-GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-
 
 # ============================================================
-# CREATE LLM
+# CREWAI LLM
 # ============================================================
 
 llm = LLM(
     model=MODEL_NAME,
+    provider="groq",
     api_key=GROQ_API_KEY,
-    base_url=GROQ_BASE_URL,
+    base_url="https://api.groq.com/openai/v1",
     temperature=0.2,
 )
 
 
 # ============================================================
-# TEXT CLEANER
+# TEXT CLEANING
 # ============================================================
 
 def clean_text(text):
-
     if text is None:
         return ""
 
@@ -56,191 +56,105 @@ def clean_text(text):
 
 
 # ============================================================
-# PAGE VALIDATION
+# PAGE LIMIT
 # ============================================================
 
 def validate_page_limit(max_pages):
 
     try:
         max_pages = int(max_pages)
-
     except (TypeError, ValueError):
-
         max_pages = 10
 
-    # User is allowed to select 5–500 pages
-    max_pages = max(5, min(max_pages, 500))
-
-    return max_pages
+    return max(5, min(max_pages, 500))
 
 
-# ============================================================
-# WORD ESTIMATION
-# ============================================================
-
-def calculate_target_words(max_pages):
-
-    # Approximate 500 words per page
+def target_words(max_pages):
     return max_pages * 500
 
 
 # ============================================================
-# BUILD OUTLINE
+# OUTLINE
 # ============================================================
 
-def build_outline(
-    topic,
-    evidence,
-    max_pages,
-):
+def build_outline(topic, evidence, max_pages):
 
-    target_words = calculate_target_words(max_pages)
-
-    # --------------------------------------------------------
-    # AGENT
-    # --------------------------------------------------------
+    words = target_words(max_pages)
 
     agent = Agent(
-
         role="Senior Research Strategist",
-
         goal=(
-            "Create a comprehensive and logically structured "
+            "Create a detailed and logically structured "
             "research outline."
         ),
-
         backstory=(
-            "You are an experienced research strategist "
-            "specializing in renewable energy, solar PV, BESS, "
-            "technology, business and market research."
+            "Experienced research strategist specializing "
+            "in renewable energy, solar PV, BESS, technology "
+            "and business research."
         ),
-
         llm=llm,
-
         verbose=False,
-
         allow_delegation=False,
     )
 
-    # --------------------------------------------------------
-    # TASK
-    # --------------------------------------------------------
-
     task = Task(
-
         description=f"""
-
 Create a detailed professional research outline.
 
-============================================================
-RESEARCH TOPIC
-============================================================
-
+RESEARCH TOPIC:
 {topic}
 
+RESEARCH EVIDENCE:
+{evidence if evidence else "No additional evidence provided."}
 
-============================================================
-AVAILABLE RESEARCH EVIDENCE
-============================================================
+REQUESTED REPORT SIZE:
+{max_pages} pages
 
-{evidence if evidence else "No additional evidence supplied."}
+APPROXIMATE WORD COUNT:
+{words} words
 
-
-============================================================
-REQUESTED REPORT LENGTH
-============================================================
-
-Maximum pages:
-{max_pages}
-
-Approximate words:
-{target_words}
-
-
-============================================================
-REQUIRED STRUCTURE
-============================================================
-
-Create a logical structure containing:
+Create a logical structure containing relevant sections such as:
 
 1. Executive Summary
 2. Introduction
-3. Background and Context
+3. Background
 4. Market Overview
 5. Technology Analysis
 6. Technical Analysis
-7. Business / Economic Analysis
-8. Market Trends
+7. Economic / Business Analysis
+8. Trends
 9. Opportunities
-10. Challenges and Risks
-11. Regional / Global Analysis
+10. Risks and Challenges
+11. Regional Analysis
 12. Future Outlook
 13. Key Findings
 14. Conclusion
 15. References
 
-
-Only include sections that are relevant to the research topic.
-
-
-============================================================
-QUALITY REQUIREMENTS
-============================================================
-
-- Use a professional research structure.
-- Create useful subsections.
-- Avoid unnecessary repetition.
-- Do not create filler sections.
-- Allocate enough sections for approximately
-  {max_pages} pages.
-- Target approximately {target_words} words.
-- Do not intentionally exceed the requested length.
+Avoid repetition and filler.
 
 Return ONLY the outline.
-
 """,
-
-        expected_output=(
-            "A detailed professional research outline "
-            "with sections and subsections."
-        ),
-
-        # IMPORTANT CREWAI REQUIREMENT
+        expected_output="A detailed professional research outline.",
         agent=agent,
     )
 
-    # --------------------------------------------------------
-    # CREW
-    # --------------------------------------------------------
-
     crew = Crew(
-
         agents=[agent],
-
         tasks=[task],
-
         process="sequential",
-
         verbose=False,
     )
-
-    # --------------------------------------------------------
-    # RUN
-    # --------------------------------------------------------
 
     result = crew.kickoff()
 
     return clean_text(
-        getattr(
-            result,
-            "raw",
-            str(result),
-        )
+        getattr(result, "raw", str(result))
     )
 
 
 # ============================================================
-# GENERATE REPORT
+# FINAL REPORT
 # ============================================================
 
 def generate_report(
@@ -250,203 +164,107 @@ def generate_report(
     max_pages,
 ):
 
-    target_words = calculate_target_words(max_pages)
-
-    # --------------------------------------------------------
-    # AGENT
-    # --------------------------------------------------------
+    words = target_words(max_pages)
 
     agent = Agent(
-
         role="Senior Research Report Writer",
-
         goal=(
-            "Produce a comprehensive, factual and professional "
+            "Produce a comprehensive factual professional "
             "research report."
         ),
-
         backstory=(
-            "You are an expert long-form research writer "
-            "specializing in renewable energy, solar PV, BESS, "
-            "technology, markets and business research."
+            "Expert long-form research writer specializing "
+            "in renewable energy, solar PV, BESS, markets "
+            "and technical research."
         ),
-
         llm=llm,
-
         verbose=False,
-
         allow_delegation=False,
     )
 
-    # --------------------------------------------------------
-    # TASK
-    # --------------------------------------------------------
-
     task = Task(
-
         description=f"""
+Write the final research report.
 
-Write the final professional research report.
-
-============================================================
-RESEARCH TOPIC
-============================================================
-
+TOPIC:
 {topic}
 
-
-============================================================
-RESEARCH OUTLINE
-============================================================
-
+OUTLINE:
 {outline}
 
-
-============================================================
-RESEARCH EVIDENCE
-============================================================
-
-{evidence if evidence else "No additional evidence supplied."}
-
+RESEARCH EVIDENCE:
+{evidence if evidence else "No additional evidence provided."}
 
 ============================================================
 REPORT LENGTH
 ============================================================
 
-Maximum requested pages:
-
+Maximum pages:
 {max_pages}
 
-Approximate target words:
+Target words:
+{words}
 
-{target_words}
-
-Use approximately 500 words per page.
-
+Approximately 500 words = 1 page.
 
 ============================================================
-REPORT CONTENT
+REPORT REQUIREMENTS
 ============================================================
 
-Include relevant sections such as:
+Include relevant:
 
-# Title
+- Title
+- Executive Summary
+- Introduction
+- Background
+- Market Analysis
+- Technical Analysis
+- Technology Analysis
+- Business/Economic Analysis
+- Trends
+- Opportunities
+- Risks
+- Regional Analysis
+- Future Outlook
+- Key Findings
+- Conclusion
+- References
 
-## Executive Summary
+Rules:
 
-## Introduction
+- Use Markdown.
+- Use professional language.
+- Use tables where useful.
+- Do not fabricate statistics.
+- Do not fabricate sources.
+- Do not fabricate citations.
+- Identify estimates and uncertainty.
+- Avoid unnecessary repetition.
+- Do not add filler.
 
-## Background and Context
+The final report should approximately match
+the user's selected {max_pages}-page limit.
 
-## Market Overview
-
-## Technology Analysis
-
-## Technical Analysis
-
-## Business / Economic Analysis
-
-## Key Trends
-
-## Opportunities
-
-## Risks and Challenges
-
-## Regional / Global Analysis
-
-## Future Outlook
-
-## Key Findings
-
-## Conclusion
-
-## References
-
-
-============================================================
-QUALITY RULES
-============================================================
-
-1. Use professional language.
-
-2. Use Markdown headings.
-
-3. Use tables where useful.
-
-4. Do not fabricate statistics.
-
-5. Do not fabricate sources.
-
-6. Do not fabricate citations.
-
-7. Clearly identify estimates.
-
-8. Clearly identify uncertainty.
-
-9. Avoid unnecessary repetition.
-
-10. Do not add filler simply to increase length.
-
-11. Keep the report approximately within
-    the selected page limit.
-
-12. Prioritize useful research content.
-
-
-============================================================
-FINAL LENGTH
-============================================================
-
-The user selected:
-
-{max_pages} pages
-
-Target:
-
-{target_words} words.
-
-Do not intentionally exceed the requested page limit.
-
-Return the complete report.
-
+Return ONLY the complete report.
 """,
-
         expected_output=(
             "A complete professional research report "
             "approximately matching the requested length."
         ),
-
-        # IMPORTANT CREWAI REQUIREMENT
         agent=agent,
     )
 
-    # --------------------------------------------------------
-    # CREW
-    # --------------------------------------------------------
-
     crew = Crew(
-
         agents=[agent],
-
         tasks=[task],
-
         process="sequential",
-
         verbose=False,
     )
-
-    # --------------------------------------------------------
-    # RUN
-    # --------------------------------------------------------
 
     result = crew.kickoff()
 
     return clean_text(
-        getattr(
-            result,
-            "raw",
-            str(result),
-        )
+        getattr(result, "raw", str(result))
     )
 
 
@@ -454,33 +272,24 @@ Return the complete report.
 # PAGE LIMIT PROTECTION
 # ============================================================
 
-def enforce_page_limit(
-    report,
-    max_pages,
-):
+def enforce_page_limit(report, max_pages):
 
-    max_words = calculate_target_words(max_pages)
+    maximum_words = target_words(max_pages)
 
     words = report.split()
 
-    if len(words) <= max_words:
-
+    if len(words) <= maximum_words:
         return report
 
-    limited_report = " ".join(
-        words[:max_words]
+    limited = " ".join(
+        words[:maximum_words]
     )
 
-    limited_report += (
-
-        "\n\n---\n\n"
-
-        f"**Report Length Notice:** "
-        f"The generated report was limited to approximately "
-        f"{max_pages} pages."
+    return (
+        limited
+        + "\n\n---\n\n"
+        + f"Report limited to approximately {max_pages} pages."
     )
-
-    return limited_report
 
 
 # ============================================================
@@ -493,65 +302,27 @@ def generate_long_research_report(
     max_pages=10,
 ):
 
-    # --------------------------------------------------------
-    # Validate pages
-    # --------------------------------------------------------
-
-    max_pages = validate_page_limit(
-        max_pages
-    )
-
-    # --------------------------------------------------------
-    # Validate topic
-    # --------------------------------------------------------
+    max_pages = validate_page_limit(max_pages)
 
     if not topic or not topic.strip():
-
         raise ValueError(
             "Research topic cannot be empty."
         )
 
-    # --------------------------------------------------------
-    # Build outline
-    # --------------------------------------------------------
-
     outline = build_outline(
-
         topic=topic.strip(),
-
-        evidence=evidence.strip()
-        if evidence
-        else "",
-
+        evidence=evidence.strip(),
         max_pages=max_pages,
     )
-
-    # --------------------------------------------------------
-    # Generate report
-    # --------------------------------------------------------
 
     report = generate_report(
-
         topic=topic.strip(),
-
         outline=outline,
-
-        evidence=evidence.strip()
-        if evidence
-        else "",
-
+        evidence=evidence.strip(),
         max_pages=max_pages,
     )
 
-    # --------------------------------------------------------
-    # Apply page limit
-    # --------------------------------------------------------
-
-    report = enforce_page_limit(
-
-        report=report,
-
-        max_pages=max_pages,
+    return enforce_page_limit(
+        report,
+        max_pages,
     )
-
-    return report
