@@ -1,4 +1,6 @@
 streamlit
 crewai
-crewai-tools
 google-genai
+python-docx
+reportlab
+openpyxl
