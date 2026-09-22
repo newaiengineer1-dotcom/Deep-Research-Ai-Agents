@@ -8,20 +8,13 @@ from crewai import Agent, Task, Crew, LLM
 
 GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 
-llm = LLM(
-    model="openai/gpt-oss-120b",
-    api_key=GROQ_API_KEY,
-    base_url="https://api.groq.com/openai/v1",
-    temperature=0.2,
-)
-
 
 # ============================================================
 # LLM
 # ============================================================
 
 llm = LLM(
-    model=MODEL_NAME,
+    model=MODEL_NAME,="openai/gpt-oss-120b",
     api_key=GROQ_API_KEY,
     base_url="https://api.groq.com/openai/v1",
     temperature=0.2,
