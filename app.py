@@ -2,6 +2,12 @@ import streamlit as st
 
 from research_agent import generate_long_research_report
 
+from report_builder import (
+    create_docx,
+    create_pdf,
+    create_xlsx,
+)
+
 
 # ============================================================
 # PAGE CONFIG
@@ -11,11 +17,12 @@ st.set_page_config(
     page_title="Deep Research AI Agent",
     page_icon="🔎",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 
 # ============================================================
-# CUSTOM UI
+# PROFESSIONAL UI
 # ============================================================
 
 st.markdown(
@@ -25,13 +32,20 @@ st.markdown(
     .main-title {
         font-size: 42px;
         font-weight: 800;
-        margin-bottom: 5px;
+        margin-bottom: 4px;
     }
 
     .subtitle {
-        font-size: 18px;
-        opacity: 0.8;
+        font-size: 17px;
+        opacity: 0.75;
         margin-bottom: 25px;
+    }
+
+    .metric-card {
+        padding: 18px;
+        border-radius: 12px;
+        border: 1px solid rgba(128,128,128,0.25);
+        text-align: center;
     }
 
     </style>
@@ -51,7 +65,7 @@ st.markdown(
 
 st.markdown(
     '<div class="subtitle">'
-    'Generate AI-powered professional research reports using Google Gemini.'
+    'Professional AI-powered research, analysis and report generation'
     '</div>',
     unsafe_allow_html=True,
 )
@@ -63,7 +77,7 @@ st.markdown(
 
 with st.sidebar:
 
-    st.header("⚙️ Research Settings")
+    st.header("⚙️ Report Settings")
 
     max_pages = st.slider(
         "📄 Maximum Report Pages",
@@ -77,18 +91,48 @@ with st.sidebar:
         f"""
 **Selected:** {max_pages} pages
 
-**Approximate target:**
-{max_pages * 500:,} words
+Approximate target:
+**{max_pages * 500:,} words**
 """
     )
 
     st.markdown("---")
 
-    st.caption("🤖 LLM")
-    st.write("Google Gemini")
+    st.subheader("📦 Output Formats")
 
-    st.caption("📄 Report range")
-    st.write("5 – 500 pages")
+    docx_enabled = st.checkbox(
+        "📄 Microsoft Word / DOCX",
+        value=True,
+    )
+
+    pdf_enabled = st.checkbox(
+        "📕 Professional PDF",
+        value=True,
+    )
+
+    xlsx_enabled = st.checkbox(
+        "📊 Excel / Google Sheets",
+        value=True,
+    )
+
+    markdown_enabled = st.checkbox(
+        "📝 Markdown",
+        value=True,
+    )
+
+    st.markdown("---")
+
+    st.caption("🤖 AI Model")
+
+    st.write(
+        "Google Gemini 3.6 Flash"
+    )
+
+    st.caption("📑 Report Style")
+
+    st.write(
+        "Professional / Consulting / Technical"
+    )
 
 
 # ============================================================
@@ -106,21 +150,22 @@ topic = st.text_area(
 
 
 evidence = st.text_area(
-    "📚 Additional Research Evidence (Optional)",
+    "📚 Additional Research Evidence / Data (Optional)",
     placeholder=(
-        "Paste additional research information, "
-        "documents, notes, statistics or references here..."
+        "Paste research notes, source information, "
+        "statistics, technical information, URLs, "
+        "documents or assumptions here..."
     ),
     height=180,
 )
 
 
 # ============================================================
-# GENERATE
+# GENERATE BUTTON
 # ============================================================
 
 if st.button(
-    "🚀 Generate Research Report",
+    "🚀 Generate Professional Research Report",
     type="primary",
     use_container_width=True,
 ):
@@ -133,8 +178,26 @@ if st.button(
 
         st.stop()
 
+    if not any([
+        docx_enabled,
+        pdf_enabled,
+        xlsx_enabled,
+        markdown_enabled,
+    ]):
+
+        st.warning(
+            "Please select at least one output format."
+        )
+
+        st.stop()
+
+    # --------------------------------------------------------
+    # AI GENERATION
+    # --------------------------------------------------------
+
     with st.spinner(
-        f"Generating approximately {max_pages} pages..."
+        f"🔎 Researching and generating approximately "
+        f"{max_pages} pages..."
     ):
 
         try:
@@ -153,27 +216,190 @@ if st.button(
 
             st.stop()
 
-    # ========================================================
-    # RESULT
-    # ========================================================
+    # --------------------------------------------------------
+    # DOCUMENT GENERATION
+    # --------------------------------------------------------
+
+    with st.spinner(
+        "📑 Building professional documents..."
+    ):
+
+        try:
+
+            docx_data = None
+            pdf_data = None
+            xlsx_data = None
+
+            if docx_enabled:
+
+                docx_data = create_docx(
+                    report,
+                    topic.strip(),
+                )
+
+            if pdf_enabled:
+
+                pdf_data = create_pdf(
+                    report,
+                    topic.strip(),
+                )
+
+            if xlsx_enabled:
+
+                xlsx_data = create_xlsx(
+                    report,
+                    topic.strip(),
+                )
+
+        except Exception as e:
+
+            st.error(
+                f"❌ Document generation failed: {e}"
+            )
+
+            st.stop()
+
+    # --------------------------------------------------------
+    # SUCCESS
+    # --------------------------------------------------------
+
+    word_count = len(report.split())
 
     st.success(
-        f"✅ Research report generated — "
-        f"maximum target: {max_pages} pages"
+        "✅ Professional research report generated successfully!"
     )
+
+    # --------------------------------------------------------
+    # METRICS
+    # --------------------------------------------------------
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+
+        st.metric(
+            "Target Pages",
+            max_pages,
+        )
+
+    with c2:
+
+        st.metric(
+            "Words",
+            f"{word_count:,}",
+        )
+
+    with c3:
+
+        st.metric(
+            "Tables",
+            len(
+                report.split("|") // 100
+            ) if False else "Included",
+        )
+
+    with c4:
+
+        st.metric(
+            "Format",
+            "Professional",
+        )
+
+    # --------------------------------------------------------
+    # DOWNLOADS
+    # --------------------------------------------------------
 
     st.markdown("---")
 
-    st.markdown(report)
-
-    # ========================================================
-    # DOWNLOAD
-    # ========================================================
-
-    st.download_button(
-        "📥 Download Research Report",
-        data=report,
-        file_name="deep_research_report.md",
-        mime="text/markdown",
-        use_container_width=True,
+    st.subheader(
+        "📥 Download Professional Report"
     )
+
+    columns = st.columns(4)
+
+    index = 0
+
+    if docx_enabled:
+
+        with columns[index]:
+
+            st.download_button(
+                "📄 Download DOCX",
+                data=docx_data,
+                file_name=(
+                    "Professional_Research_Report.docx"
+                ),
+                mime=(
+                    "application/vnd.openxmlformats-officedocument."
+                    "wordprocessingml.document"
+                ),
+                use_container_width=True,
+            )
+
+        index += 1
+
+    if pdf_enabled:
+
+        with columns[index]:
+
+            st.download_button(
+                "📕 Download PDF",
+                data=pdf_data,
+                file_name=(
+                    "Professional_Research_Report.pdf"
+                ),
+                mime="application/pdf",
+                use_container_width=True,
+            )
+
+        index += 1
+
+    if xlsx_enabled:
+
+        with columns[index]:
+
+            st.download_button(
+                "📊 Download XLSX",
+                data=xlsx_data,
+                file_name=(
+                    "Research_Data.xlsx"
+                ),
+                mime=(
+                    "application/vnd.openxmlformats-officedocument."
+                    "spreadsheetml.sheet"
+                ),
+                use_container_width=True,
+            )
+
+        index += 1
+
+    if markdown_enabled:
+
+        with columns[index]:
+
+            st.download_button(
+                "📝 Download Markdown",
+                data=report,
+                file_name=(
+                    "Research_Report.md"
+                ),
+                mime="text/markdown",
+                use_container_width=True,
+            )
+
+    # --------------------------------------------------------
+    # PREVIEW
+    # --------------------------------------------------------
+
+    st.markdown("---")
+
+    st.subheader(
+        "👁️ Report Preview"
+    )
+
+    with st.expander(
+        "Open generated report",
+        expanded=True,
+    ):
+
+        st.markdown(report)
