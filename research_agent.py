@@ -24,7 +24,7 @@ if not GEMINI_API_KEY:
 #   google/gemini...
 #
 # CrewAI Gemini format:
-MODEL_NAME = "gemini/gemini-2.5-flash"
+MODEL_NAME = "gemini/gemini-3.6-flash"
 
 
 llm = LLM(
