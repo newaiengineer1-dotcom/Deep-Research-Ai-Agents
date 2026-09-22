@@ -1,199 +1,329 @@
 import os
 import re
-from typing import List
+from crewai import Agent, Task, Crew, LLM
 
-import streamlit as st
-from search_tool import DuckDuckGoResearchTool
 
-MODEL_NAME = "openai/gpt-oss-120b"
-GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+# =========================================================
+# CONFIGURATION
+# =========================================================
 
-def get_groq_api_key():
-    key = os.getenv("GROQ_API_KEY")
-    if key:
-        return key
-    try:
-        return st.secrets["GROQ_API_KEY"]
-    except Exception:
-        return None
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-def build_llm():
-    from crewai import LLM
-    api_key = get_groq_api_key()
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY is missing. Add it to Streamlit Secrets.")
-    return LLM(
-        model=MODEL_NAME,
-        api_key=api_key,
-        base_url=GROQ_BASE_URL,
-        temperature=0.2,
-        max_tokens=12000,
+if not GROQ_API_KEY:
+    raise RuntimeError(
+        "GROQ_API_KEY is not configured."
     )
+
+
+# Correct Groq model ID
+MODEL_NAME = "openai/gpt-oss-120b"
+
+
+# =========================================================
+# LLM
+# =========================================================
+
+llm = LLM(
+    model=MODEL_NAME,
+    api_key=GROQ_API_KEY,
+    base_url="https://api.groq.com/openai/v1",
+    temperature=0.2,
+)
+
+
+# =========================================================
+# TEXT CLEANING
+# =========================================================
 
 def clean_text(text):
-    return re.sub(r"\r\n?", "\n", str(text)).strip()
+    if not text:
+        return ""
 
-def extract_urls(text):
-    urls = re.findall(r"https?://[^\s)\]>]+", text)
-    result, seen = [], set()
-    for url in urls:
-        url = url.rstrip(".,;")
-        if url not in seen:
-            seen.add(url)
-            result.append(url)
-    return result
+    text = str(text)
 
-def research_sources(topic, research_rounds):
-    tool = DuckDuckGoResearchTool()
-    queries = [
-        topic,
-        f"{topic} overview evidence statistics",
-        f"{topic} latest research studies",
-        f"{topic} official government reports",
-        f"{topic} academic research papers",
-        f"{topic} challenges risks limitations",
-        f"{topic} future trends outlook",
-        f"{topic} case studies examples",
-        f"{topic} economic social environmental impact",
-        f"{topic} technology implementation best practices",
-        f"{topic} history development timeline",
-        f"{topic} policy regulation standards",
-    ]
-    selected = queries[:max(3, min(research_rounds, len(queries)))]
-    evidence = []
-    for i, query in enumerate(selected, 1):
-        st.write(f"🔎 Research round {i}/{len(selected)}: {query}")
-        evidence.append(f"### Research Query {i}\n{query}\n\n{tool._run(query)}")
-    return "\n\n".join(evidence)
+    text = text.replace("\x00", "")
 
-def build_outline(topic, evidence):
-    from crewai import Agent, Crew, Process, Task
+    return text.strip()
+
+
+# =========================================================
+# PAGE ESTIMATION
+# =========================================================
+
+def estimate_pages(text):
+    """
+    Approximate page count.
+
+    Assumption:
+    ~500 words per page.
+
+    This is an estimate because actual page count
+    depends on font, margins, spacing, tables, etc.
+    """
+
+    words = len(text.split())
+
+    return max(1, round(words / 500))
+
+
+def estimate_words_for_pages(max_pages):
+    """
+    Convert requested pages into approximate word count.
+    """
+
+    return max_pages * 500
+
+
+# =========================================================
+# BUILD RESEARCH OUTLINE
+# =========================================================
+
+def build_outline(topic, evidence, max_pages):
+
+    target_words = estimate_words_for_pages(max_pages)
+
     agent = Agent(
-        role="Senior Research Architect",
-        goal="Create a comprehensive logical outline for a very long research report.",
-        backstory="You organize complex topics into rigorous chapters, sections, evidence areas, case studies, limitations, and references.",
-        llm=build_llm(),
-        allow_delegation=False,
+        role="Senior Research Strategist",
+        goal=(
+            "Create a comprehensive and logically structured "
+            "research report outline."
+        ),
+        backstory=(
+            "You are an experienced research strategist specializing "
+            "in technical, business, energy and technology research."
+        ),
+        llm=llm,
         verbose=False,
+        allow_delegation=False,
     )
+
     task = Task(
-        description=f"""Create a detailed research outline for:
+        description=f"""
+Create a detailed research outline for:
+
+RESEARCH TOPIC:
 {topic}
 
-Available web evidence:
-{evidence[:30000]}
+AVAILABLE RESEARCH EVIDENCE:
+{evidence}
 
-Create approximately 20 to 35 major chapters.
-Include executive summary, introduction, definitions, history, current state, technologies, evidence, quantitative data, case studies, regional/global perspectives, impacts, risks, competing viewpoints, regulation where relevant, future scenarios, conclusion and references.
-Do not invent facts or references. Return a numbered outline.""",
-        expected_output="A detailed multi-chapter research outline.",
-        agent=agent,
+TARGET REPORT SIZE:
+Approximately {max_pages} pages.
+
+TARGET WORD COUNT:
+Approximately {target_words} words.
+
+Requirements:
+
+1. Create a logical professional structure.
+2. Include an introduction.
+3. Include major research sections.
+4. Include subsections where appropriate.
+5. Include market/technical/business analysis where relevant.
+6. Include evidence-based conclusions.
+7. Avoid unnecessary repetition.
+8. Allocate enough sections to support approximately
+   {max_pages} pages.
+9. The final report must not intentionally exceed the
+   requested page limit.
+
+Return ONLY the outline.
+""",
+        expected_output="A detailed structured research outline.",
     )
-    crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False)
-    return clean_text(getattr(crew.kickoff(), "raw", ""))
 
-def split_outline(outline):
-    lines = [x.strip() for x in outline.splitlines() if x.strip()]
-    chapters, current = [], []
-    for line in lines:
-        if re.match(r"^(?:#{1,4}\s*)?(?:Chapter\s+)?\d+[\.\):\-]\s+", line, re.I):
-            if current:
-                chapters.append("\n".join(current))
-            current = [line]
-        elif current:
-            current.append(line)
-    if current:
-        chapters.append("\n".join(current))
-    return chapters[:35] if chapters else []
-
-def write_chapter(topic, chapter_outline, evidence, number, total, words):
-    from crewai import Agent, Crew, Process, Task
-    agent = Agent(
-        role="Senior Research Writer",
-        goal="Write detailed evidence-grounded research chapters without fabricating citations.",
-        backstory="You write academic-style reports, explain difficult subjects clearly, distinguish evidence from interpretation, and never fabricate facts, statistics, quotations or URLs.",
-        llm=build_llm(),
-        allow_delegation=False,
+    crew = Crew(
+        agents=[agent],
+        tasks=[task],
         verbose=False,
     )
-    task = Task(
-        description=f"""Write chapter {number} of {total}.
 
-Topic:
+    result = crew.kickoff()
+
+    return clean_text(
+        getattr(result, "raw", str(result))
+    )
+
+
+# =========================================================
+# GENERATE FINAL REPORT
+# =========================================================
+
+def generate_report(topic, outline, evidence, max_pages):
+
+    target_words = estimate_words_for_pages(max_pages)
+
+    agent = Agent(
+        role="Senior Research Report Writer",
+        goal=(
+            "Produce a comprehensive, factual, well-structured "
+            "professional research report."
+        ),
+        backstory=(
+            "You are an expert long-form research writer who "
+            "produces evidence-based technical and business reports."
+        ),
+        llm=llm,
+        verbose=False,
+        allow_delegation=False,
+    )
+
+    task = Task(
+        description=f"""
+Write the final research report.
+
+TOPIC:
 {topic}
 
-Chapter outline:
-{chapter_outline}
+RESEARCH OUTLINE:
+{outline}
 
-Research evidence:
-{evidence[:35000]}
+RESEARCH EVIDENCE:
+{evidence}
 
-Target length: approximately {words} words.
+REPORT LENGTH:
 
-Rules:
-- Use supplied evidence and established knowledge.
-- Never invent statistics, quotations, study titles, organizations, URLs or citations.
-- Say when evidence is insufficient.
-- Avoid repetition.
-- Use Markdown headings and subheadings.
-- Use tables/bullets when useful.
-- Explain concepts deeply.
-- Distinguish documented facts, analysis and uncertainty.
-- Do not add fake footnotes or a references section.""",
-        expected_output=f"A detailed Markdown chapter of approximately {words} words.",
-        agent=agent,
+Maximum pages requested:
+{max_pages}
+
+Approximate maximum words:
+{target_words}
+
+IMPORTANT LENGTH RULE:
+
+Keep the report approximately within the requested
+{max_pages}-page limit.
+
+Use approximately 500 words per page.
+
+Therefore:
+
+5 pages   ≈ 2,500 words
+10 pages  ≈ 5,000 words
+25 pages  ≈ 12,500 words
+50 pages  ≈ 25,000 words
+100 pages ≈ 50,000 words
+250 pages ≈ 125,000 words
+500 pages ≈ 250,000 words
+
+REPORT REQUIREMENTS:
+
+- Professional title
+- Executive Summary
+- Introduction
+- Main research sections
+- Subsections
+- Technical/business analysis where relevant
+- Tables where useful
+- Key findings
+- Risks and limitations
+- Conclusion
+- References/sources based only on available evidence
+
+Do not invent sources.
+
+Do not fabricate statistics.
+
+Clearly identify uncertainty.
+
+Do not repeat information merely to increase length.
+
+Prioritize useful information over filler.
+
+Use Markdown headings.
+
+The final report should be approximately
+{max_pages} pages or less.
+""",
+        expected_output=(
+            "A complete professional research report "
+            "within the requested length."
+        ),
     )
-    crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False)
-    return clean_text(getattr(crew.kickoff(), "raw", ""))
 
-def generate_long_research_report(topic, target_pages, research_rounds=6):
-    # Planning estimate only: actual pages depend on formatting.
-    total_words = target_pages * 500
-
-    st.write("🧭 Building research evidence...")
-    evidence = research_sources(topic, research_rounds)
-
-    st.write("🗂️ Building report outline...")
-    outline = build_outline(topic, evidence)
-    chapters = split_outline(outline)
-
-    if len(chapters) < 10:
-        chapters = [f"Chapter {i}: Extended Analysis of {topic}" for i in range(1, 21)]
-
-    budget = max(900, total_words // len(chapters))
-
-    parts = [
-        f"# Comprehensive Research Report: {topic}",
-        "",
-        f"*Target planning length: approximately {target_pages} pages / {total_words:,} words.*",
-        "",
-        "## Important Note on Page Count",
-        "Page count depends on formatting. This application plans around 500 words per page; the final printed page count varies with font, margins, headings, spacing, tables and export format.",
-        "",
-        "## Research Method",
-        "The report uses multiple web-search rounds, structured outlining and chapter-by-chapter synthesis. Search coverage varies by topic.",
-        "",
-        "## Table of Contents",
-        outline,
-        "",
-    ]
-
-    for i, chapter in enumerate(chapters, 1):
-        st.write(f"✍️ Writing chapter {i}/{len(chapters)} — target ≈ {budget:,} words")
-        parts.append(write_chapter(topic, chapter, evidence, i, len(chapters), budget))
-        parts.append("")
-
-    urls = extract_urls(evidence)
-    parts += ["## References", ""]
-    parts += [f"{i}. {url}" for i, url in enumerate(urls, 1)]
-
-    report = "\n\n".join(parts)
-    actual_words = len(report.split())
-    report += (
-        "\n\n---\n\n## Generation Statistics\n\n"
-        f"- Requested planning length: {target_pages:,} pages\n"
-        f"- Planning estimate: {total_words:,} words\n"
-        f"- Actual generated length: {actual_words:,} words\n"
-        f"- Estimated pages from actual words: {max(1, round(actual_words / 500)):,}\n"
+    crew = Crew(
+        agents=[agent],
+        tasks=[task],
+        verbose=False,
     )
+
+    result = crew.kickoff()
+
+    return clean_text(
+        getattr(result, "raw", str(result))
+    )
+
+
+# =========================================================
+# LIMIT REPORT BY WORD COUNT
+# =========================================================
+
+def enforce_page_limit(report, max_pages):
+
+    max_words = estimate_words_for_pages(max_pages)
+
+    words = report.split()
+
+    if len(words) <= max_words:
+        return report
+
+    truncated_words = words[:max_words]
+
+    truncated_report = " ".join(truncated_words)
+
+    truncated_report += (
+        "\n\n---\n\n"
+        "*Report truncated to the selected maximum "
+        f"length of approximately {max_pages} pages.*"
+    )
+
+    return truncated_report
+
+
+# =========================================================
+# MAIN FUNCTION
+# =========================================================
+
+def generate_long_research_report(
+    topic,
+    evidence=None,
+    max_pages=25,
+):
+
+    # Safety limits
+    max_pages = max(5, min(int(max_pages), 500))
+
+    if evidence is None:
+        evidence = ""
+
+    # -----------------------------------------------------
+    # Build outline
+    # -----------------------------------------------------
+
+    outline = build_outline(
+        topic=topic,
+        evidence=evidence,
+        max_pages=max_pages,
+    )
+
+    # -----------------------------------------------------
+    # Generate report
+    # -----------------------------------------------------
+
+    report = generate_report(
+        topic=topic,
+        outline=outline,
+        evidence=evidence,
+        max_pages=max_pages,
+    )
+
+    # -----------------------------------------------------
+    # Enforce requested page limit
+    # -----------------------------------------------------
+
+    report = enforce_page_limit(
+        report=report,
+        max_pages=max_pages,
+    )
+
     return report
