@@ -1,4 +1,6 @@
+```python
 import os
+
 from crewai import Agent, Task, Crew, LLM
 
 
@@ -6,7 +8,22 @@ from crewai import Agent, Task, Crew, LLM
 # CONFIGURATION
 # ============================================================
 
-GROQ_API_KEY = os.environ["GROQ_API_KEY"]
+MODEL_NAME = "openai/gpt-oss-120b"
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+
+
+# ============================================================
+# API KEY
+# ============================================================
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not GROQ_API_KEY:
+    raise RuntimeError(
+        "GROQ_API_KEY is not configured. "
+        "Add GROQ_API_KEY to your environment variables "
+        "or Streamlit Secrets."
+    )
 
 
 # ============================================================
@@ -14,9 +31,9 @@ GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 # ============================================================
 
 llm = LLM(
-    model=MODEL_NAME,="openai/gpt-oss-120b",
+    model=MODEL_NAME,
     api_key=GROQ_API_KEY,
-    base_url="https://api.groq.com/openai/v1",
+    base_url=GROQ_BASE_URL,
     temperature=0.2,
 )
 
@@ -26,6 +43,9 @@ llm = LLM(
 # ============================================================
 
 def clean_text(text):
+    """
+    Clean model output and remove null characters.
+    """
     if not text:
         return ""
 
@@ -36,8 +56,26 @@ def estimate_words_for_pages(max_pages):
     """
     Approximate 500 words per page.
     """
-
     return int(max_pages) * 500
+
+
+# ============================================================
+# CREWAI RESULT HELPER
+# ============================================================
+
+def get_result_text(result):
+    """
+    Safely extract text from a CrewAI kickoff result.
+    """
+    if result is None:
+        return ""
+
+    raw = getattr(result, "raw", None)
+
+    if raw:
+        return clean_text(raw)
+
+    return clean_text(str(result))
 
 
 # ============================================================
@@ -96,13 +134,23 @@ Requirements:
 7. Include technical analysis where relevant.
 8. Include business and economic analysis where relevant.
 9. Include risks and challenges.
-10. Include future outlook.
-11. Include evidence-based conclusions.
-12. Avoid unnecessary repetition.
-13. Allocate enough sections to support approximately
+10. Include opportunities where relevant.
+11. Include future outlook.
+12. Include evidence-based conclusions.
+13. Avoid unnecessary repetition.
+14. Allocate enough sections to support approximately
     {max_pages} pages.
-14. The final report must not intentionally exceed
-    the requested page limit.
+15. The final report should remain within the requested
+    approximate page limit.
+
+Important:
+
+- Do not invent research evidence.
+- Do not invent statistics.
+- Do not invent citations.
+- Use only the supplied evidence where factual claims
+  require supporting evidence.
+- Clearly identify areas where evidence is unavailable.
 
 Return ONLY the outline.
 """,
@@ -112,9 +160,6 @@ Return ONLY the outline.
             "with sections and subsections."
         ),
 
-        # ====================================================
-        # IMPORTANT FIX
-        # ====================================================
         agent=agent,
     )
 
@@ -127,9 +172,7 @@ Return ONLY the outline.
 
     result = crew.kickoff()
 
-    return clean_text(
-        getattr(result, "raw", str(result))
-    )
+    return get_result_text(result)
 
 
 # ============================================================
@@ -214,7 +257,7 @@ Include:
 3. Introduction
 4. Main research sections
 5. Subsections
-6. Market analysis
+6. Market analysis where relevant
 7. Technical analysis where relevant
 8. Business/economic analysis where relevant
 9. Key trends
@@ -225,7 +268,9 @@ Include:
 14. Conclusion
 15. References/sources where available
 
-Rules:
+============================================================
+WRITING RULES
+============================================================
 
 - Use Markdown headings.
 - Use tables where useful.
@@ -235,6 +280,10 @@ Rules:
 - Clearly identify uncertainty.
 - Do not repeat information simply to increase length.
 - Prioritize useful information over filler.
+- Follow the research outline.
+- Use the supplied evidence as the factual foundation.
+- If evidence is insufficient for a claim, say so.
+- Do not present unsupported information as fact.
 - Keep the report approximately within the requested
   {max_pages}-page limit.
 
@@ -246,9 +295,6 @@ Return the complete research report.
             "within the requested length."
         ),
 
-        # ====================================================
-        # IMPORTANT FIX
-        # ====================================================
         agent=agent,
     )
 
@@ -261,9 +307,7 @@ Return the complete research report.
 
     result = crew.kickoff()
 
-    return clean_text(
-        getattr(result, "raw", str(result))
-    )
+    return get_result_text(result)
 
 
 # ============================================================
@@ -300,19 +344,39 @@ def generate_long_research_report(
 ):
 
     # --------------------------------------------------------
-    # Safety validation
+    # Validate topic
     # --------------------------------------------------------
 
+    if not topic or not str(topic).strip():
+        raise ValueError(
+            "Research topic cannot be empty."
+        )
+
+    topic = str(topic).strip()
+
+    # --------------------------------------------------------
+    # Validate page count
+    # --------------------------------------------------------
+
+    try:
+        max_pages = int(max_pages)
+    except (TypeError, ValueError):
+        max_pages = 25
+
+    # Keep requested pages between 5 and 500
     max_pages = max(
         5,
-        min(
-            int(max_pages),
-            500,
-        ),
+        min(max_pages, 500),
     )
+
+    # --------------------------------------------------------
+    # Validate evidence
+    # --------------------------------------------------------
 
     if evidence is None:
         evidence = ""
+
+    evidence = clean_text(evidence)
 
     # --------------------------------------------------------
     # STEP 1 — CREATE OUTLINE
@@ -323,6 +387,11 @@ def generate_long_research_report(
         evidence=evidence,
         max_pages=max_pages,
     )
+
+    if not outline:
+        raise RuntimeError(
+            "The AI failed to generate the research outline."
+        )
 
     # --------------------------------------------------------
     # STEP 2 — WRITE REPORT
@@ -335,6 +404,11 @@ def generate_long_research_report(
         max_pages=max_pages,
     )
 
+    if not report:
+        raise RuntimeError(
+            "The AI failed to generate the research report."
+        )
+
     # --------------------------------------------------------
     # STEP 3 — ENFORCE PAGE LIMIT
     # --------------------------------------------------------
@@ -345,3 +419,67 @@ def generate_long_research_report(
     )
 
     return report
+```
+
+### What I fixed
+
+1. **Fixed the invalid `MODEL_NAME` syntax**
+
+   ```python
+   MODEL_NAME = "openai/gpt-oss-120b"
+   ```
+
+2. **Fixed the LLM configuration**
+
+   ```python
+   llm = LLM(
+       model=MODEL_NAME,
+       api_key=GROQ_API_KEY,
+       base_url="https://api.groq.com/openai/v1",
+       temperature=0.2,
+   )
+   ```
+
+3. **Added safe API-key handling**
+
+   ```python
+   GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+   ```
+
+4. Added `get_result_text()` so CrewAI results are handled more safely.
+
+5. Added validation for an empty research topic.
+
+6. Added validation for invalid page numbers.
+
+7. Preserved your **5–500 page range**.
+
+8. Preserved the **LLM-controlled outline → report workflow**.
+
+9. Added stronger instructions not to fabricate sources or statistics.
+
+10. Removed unnecessary comments that could make the file harder to maintain.
+
+### Important: 500 pages
+
+Your code can **request** up to 500 pages, but a single LLM generation should not be expected to reliably produce a 250,000-word report in one CrewAI task. Groq currently documents GPT-OSS 120B with a 131,072-token context window and a maximum completion of 65,536 tokens.
+
+For your research-agent application, the better architecture is:
+
+**Topic → LLM decides report size → Outline → Section 1 → Section 2 → Section 3 → ... → Combine → Final report**
+
+That will also prevent the current `enforce_page_limit()` function from simply cutting a report in the middle of a sentence when the model generates too much.
+
+Also, the current Groq model ID you selected, `openai/gpt-oss-120b`, is valid on Groq.
+
+If you are using this inside your **Streamlit AI Research Agent**, this corrected file can replace your current `research_agent.py`; your `app.py` can continue calling:
+
+```python
+report = generate_long_research_report(
+    topic=topic,
+    evidence=evidence,
+    max_pages=max_pages,
+)
+```
+
+One additional point: if your next error is related to **CrewAI/LiteLLM compatibility**, that will be a dependency-version issue rather than a Python syntax issue. In that case, the `requirements.txt` should be pinned to compatible versions rather than leaving CrewAI completely unpinned.
