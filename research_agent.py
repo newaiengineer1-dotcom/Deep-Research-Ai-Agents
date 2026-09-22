@@ -6,14 +6,14 @@ from crewai import Agent, Task, Crew, LLM
 # CONFIGURATION
 # ============================================================
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 
-if not GROQ_API_KEY:
-    raise RuntimeError(
-        "GROQ_API_KEY is not configured."
-    )
-
-MODEL_NAME = "openai/gpt-oss-120b"
+llm = LLM(
+    model="openai/gpt-oss-120b",
+    api_key=GROQ_API_KEY,
+    base_url="https://api.groq.com/openai/v1",
+    temperature=0.2,
+)
 
 
 # ============================================================
