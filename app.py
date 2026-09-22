@@ -3,6 +3,10 @@ import streamlit as st
 from research_agent import generate_long_research_report
 
 
+# ============================================================
+# PAGE CONFIG
+# ============================================================
+
 st.set_page_config(
     page_title="Deep Research AI Agent",
     page_icon="🔎",
@@ -10,10 +14,46 @@ st.set_page_config(
 )
 
 
-st.title("🔎 Deep Research AI Agent")
+# ============================================================
+# CUSTOM UI
+# ============================================================
 
-st.caption(
-    "Generate AI-powered long-form research reports."
+st.markdown(
+    """
+    <style>
+
+    .main-title {
+        font-size: 42px;
+        font-weight: 800;
+        margin-bottom: 5px;
+    }
+
+    .subtitle {
+        font-size: 18px;
+        opacity: 0.8;
+        margin-bottom: 25px;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
+# HEADER
+# ============================================================
+
+st.markdown(
+    '<div class="main-title">🔎 Deep Research AI Agent</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="subtitle">'
+    'Generate AI-powered professional research reports using Google Gemini.'
+    '</div>',
+    unsafe_allow_html=True,
 )
 
 
@@ -35,12 +75,20 @@ with st.sidebar:
 
     st.info(
         f"""
-        **Selected:** {max_pages} pages
+**Selected:** {max_pages} pages
 
-        **Approximate target:**
-        {max_pages * 500:,} words
-        """
+**Approximate target:**
+{max_pages * 500:,} words
+"""
     )
+
+    st.markdown("---")
+
+    st.caption("🤖 LLM")
+    st.write("Google Gemini")
+
+    st.caption("📄 Report range")
+    st.write("5 – 500 pages")
 
 
 # ============================================================
@@ -49,14 +97,20 @@ with st.sidebar:
 
 topic = st.text_area(
     "🔬 Research Topic",
-    placeholder="Example: Global Solar PV and BESS Outlook 2026",
+    placeholder=(
+        "Example:\n"
+        "Global Solar PV and BESS Outlook 2026"
+    ),
     height=120,
 )
 
 
 evidence = st.text_area(
-    "📚 Research Evidence (Optional)",
-    placeholder="Paste additional research evidence here...",
+    "📚 Additional Research Evidence (Optional)",
+    placeholder=(
+        "Paste additional research information, "
+        "documents, notes, statistics or references here..."
+    ),
     height=180,
 )
 
@@ -74,7 +128,7 @@ if st.button(
     if not topic.strip():
 
         st.warning(
-            "Please enter a research topic."
+            "⚠️ Please enter a research topic."
         )
 
         st.stop()
@@ -86,11 +140,8 @@ if st.button(
         try:
 
             report = generate_long_research_report(
-
                 topic=topic.strip(),
-
                 evidence=evidence.strip(),
-
                 max_pages=max_pages,
             )
 
@@ -102,25 +153,27 @@ if st.button(
 
             st.stop()
 
+    # ========================================================
+    # RESULT
+    # ========================================================
 
     st.success(
-        f"✅ Report generated — target: {max_pages} pages"
+        f"✅ Research report generated — "
+        f"maximum target: {max_pages} pages"
     )
 
     st.markdown("---")
 
     st.markdown(report)
 
+    # ========================================================
+    # DOWNLOAD
+    # ========================================================
 
     st.download_button(
-
         "📥 Download Research Report",
-
         data=report,
-
         file_name="deep_research_report.md",
-
         mime="text/markdown",
-
         use_container_width=True,
     )
