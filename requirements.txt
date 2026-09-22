@@ -1,5 +1,4 @@
 streamlit
 crewai
 crewai-tools
-groq
-openai
+google-genai
